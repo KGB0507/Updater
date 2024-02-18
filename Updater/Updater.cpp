@@ -1,21 +1,19 @@
 /////////////////////////////////////////////////////////////////////////////
 //Updater, v.1.0
 /////////////////////////////////////////////////////////////////////////////
-//Copyright (c) Kirill Belozerov, 2021-2023. All Rights Reserved
+//Copyright (c) Kirill Belozerov, 2021-2024. All Rights Reserved
 /////////////////////////////////////////////////////////////////////////////
 
 /////////////////////////////////////////////////////////////////////////////
 //Notes: 
-// add structure UpdateInfo: version, priority, size etc
-// add dynamic massive AvailableUpdateList which keeps received information about updates
 /////////////////////////////////////////////////////////////////////////////
 
 
 #include <iostream>
 #include <string>
-#include <cstring>
-#include <winsock2.h>
-#include <ws2tcpip.h>
+#include <list>
+#include <Exception>
+#include "SocketWrappers.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -25,7 +23,7 @@ using namespace std;
 
 //Information about this Program Build. 
 #define VERSION "Version 1.0"
-#define AUTHOR "Copyright (c) Kirill Belozerov, 2021-2023. All Rights Reserved"
+#define AUTHOR "Copyright (c) Kirill Belozerov, 2021-2024. All Rights Reserved"
 
 #define UNDERCONSTR "Under construction"
 #define DEBUG 1.0
@@ -33,95 +31,153 @@ using namespace std;
 
 
 
+struct UpdateInfo
+{
+    string version;
+    int priority = 0;
+    string releaseDate;
+    double size = 0;
+};
 
-const string SERVERADDR = "127.0.0.1"; // IP-адрес сервера
-const int SERVERPORT = 8080; // Порт сервера
+list<UpdateInfo> AvailableUpdateList; //List which keeps received information about updates
 
 
-int main() 
+void PrintAvailableUpdateList()
+{
+    cout << "Available updates: " << endl;
+
+    int numOfUpdates = AvailableUpdateList.size();
+
+    for (auto i = AvailableUpdateList.begin(); i != AvailableUpdateList.end(); i++)
+    {
+        cout << i->version << "\t";
+        cout << i->priority << "\t";
+        cout << i->releaseDate << "\t";
+        cout << i->size << endl;
+    }
+}
+
+
+
+const string SERVERADDR = "127.0.0.1"; // Server IP-address
+const int SERVERPORT = 8080; // Server Port
+
+
+int main(int argc, char* argv[]) 
 {
     setlocale(LC_ALL, "Rus");
 
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) 
-    {
-        cerr << "Ошибка инициализации winsock" << endl;
+    //Application properties reveived from the Command line
+    string appNumber = argv[1];
+    string appCurrentVersion = argv[2];
+
+    bool socketStatus;
+
+    Socket clientSocket = Socket(SERVERADDR, SERVERPORT);
+    socketStatus = clientSocket.socketStatus;
+    if (!socketStatus)
         return 1;
-    }
-
-    // Создание сокета
-    SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (clientSocket == INVALID_SOCKET) 
-    {
-        cerr << "Ошибка создания сокета" << endl;
-        WSACleanup();
+    
+    socketStatus = clientSocket.ConnectToServer();
+    if (!socketStatus)
         return 1;
-    }
+    
+    string request = appNumber + "\t" + appCurrentVersion;
+    socketStatus = clientSocket.SendRequest(request);
 
-    // Создание структуры адреса сервера
-    sockaddr_in serverAddress{};
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(SERVERPORT);
-    if (inet_pton(AF_INET, SERVERADDR.c_str(), &(serverAddress.sin_addr.s_addr)) <= 0) 
+    char* buffer = clientSocket.buffer;
+    
+    //Result handling
+    string response = string(buffer);
+    string delimiter = "/t";
+    size_t pos = 0;
+    string token;
+
+    //response status
+    pos = response.find(delimiter);
+    token = response.substr(0, pos);
+    int responseStatus = stoi(token);
+    response.erase(0, pos + delimiter.length());
+
+    //number of updates
+    pos = response.find(delimiter);
+    token = response.substr(0, pos);
+    int numOfUpdates = stoi(token);
+    response.erase(0, pos + delimiter.length());
+    
+
+    /*
+    * struct UpdateInfo
     {
-        cerr << "Ошибка адреса сервера" << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
-    }
+        string version;
+        int priority;
+        string releaseDate;
+        double size;
+    };
 
-    // Подключение к серверу
-    if (connect(clientSocket, reinterpret_cast<const sockaddr*>(&serverAddress), sizeof(serverAddress)) == SOCKET_ERROR) 
+    list<UpdateInfo> AvailableUpdateList; //List which keeps received information about updates
+    */
+
+    UpdateInfo updInfo;
+
+    while ((pos = response.find(delimiter)) != string::npos) 
     {
-        cerr << "Ошибка подключения к серверу" << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
+        //version
+        pos = response.find(delimiter);
+        token = response.substr(0, pos);
+        updInfo.version = token;
+        int numOfUpdates = stoi(token);
+        response.erase(0, pos + delimiter.length());
+
+        //priority
+        pos = response.find(delimiter);
+        token = response.substr(0, pos);
+        updInfo.priority = stoi(token);
+        response.erase(0, pos + delimiter.length());
+
+        //date of development
+        pos = response.find(delimiter);
+        token = response.substr(0, pos);
+        updInfo.releaseDate = token;
+        response.erase(0, pos + delimiter.length());
+
+        pos = response.find(delimiter);
+        token = response.substr(0, pos);
+        int size = stoi(token);
+        response.erase(0, pos + delimiter.length());
+
+        AvailableUpdateList.push_back(updInfo);
     }
+    ////////////////////////////
+    
+    string selectedVersion;
 
-    // Параметры номера приложения и версии
-    int appNumber;
-    string appVersion;
-
-    cout << "Введите номер приложения: ";
-    cin >> appNumber;
-
-    cout << "Введите версию приложения (до 3 чисел, разделенных точкой): ";
-    cin >> appVersion;
-
-    // Формирование запроса
-    string request = to_string(appNumber) + " " + appVersion;
-
-    // Отправка запроса
-    if (send(clientSocket, request.c_str(), request.length(), 0) == SOCKET_ERROR) 
+    switch (responseStatus)
     {
-        cerr << "Ошибка отправки запроса" << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    // Получение ответа
-    char buffer[10];
-    memset(buffer, 0, sizeof(buffer));
-
-    if (recv(clientSocket, buffer, sizeof(buffer), 0) == SOCKET_ERROR) 
+    case 200:
     {
-        cerr << "Ошибка получения ответа" << endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
+        cout << "Server response status: 200 OK" << endl;
+        PrintAvailableUpdateList();
+        cout << "Please select the version you want to install: ";
+        cin >> selectedVersion;
+        break;
     }
-
-    // Закрытие сокета
-    closesocket(clientSocket);
-    WSACleanup();
-
-    // Вывод результата
-    string response = std::string(buffer);
-    bool hasUpdates = (response == "true");
-
-    cout << "Наличие обновлений: " << (hasUpdates ? "true" : "false") << endl;
+    case 300:
+    {
+        cout << "No updates available. Your version is up to date" << endl;
+        break;
+    }
+    case 404:
+    {
+        cout << "Invalid update request: unknown application" << endl;
+        break;
+    }
+    default:
+    {
+        break;
+    }
+    }
 
     return 0;
 }
+
