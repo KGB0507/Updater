@@ -18,18 +18,18 @@
     <ClCompile Include="Updater.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="FileManager.cpp">
+    <ClCompile Include="SocketWrapper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SocketWrapperscpp.cpp">
+    <ClCompile Include="UpdateManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="FileManager.h">
+    <ClInclude Include="SocketWrapper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SocketWrappers.h">
+    <ClInclude Include="UpdateManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
