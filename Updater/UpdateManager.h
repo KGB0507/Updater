@@ -8,6 +8,7 @@
 #include <regex>
 #include <thread>
 #include "SocketWrapper.h"
+#include "ClientException.h"
 
 
 struct UpdateInfo

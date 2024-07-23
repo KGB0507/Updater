@@ -1,49 +1,80 @@
 #include "SocketWrapper.h"
 
-Socket::Socket(const std::string servAddress, const int servPort)
-{
-    serverAddr = servAddress;
-    serverPort = servPort;
 
-    try
-    {
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-            throw std::exception();
-    }
-    catch (std::exception& ex)
+Socket::Socket(const std::string serverAddress, const int serverPort)
+{
+    this->serverAddressLiteral = serverAddress;
+    this->serverPort = serverPort;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
     {
         socketStatus = false;
-        std::cout << "Winsocket initialization error: " << ex.what() << std::endl;
+        throw ClientException(WSAGetLastError(), "Winsock initialization error");
     }
 
-    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
+    {
+        socketStatus = false;
+        throw ClientException(WSAGetLastError(), "Incorrect Winsock version");
+    }
+
+    clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    socketId = clientSocket;
     if (clientSocket == INVALID_SOCKET)
     {
-        std::cout << "Socket creation error" << std::endl;
-        WSACleanup();
         socketStatus = false;
+        throw ClientException(WSAGetLastError(), "Socket creation error");
     }
-
-    sockaddr_in serverAddress{};
-    try
-    {
-        serverAddress.sin_family = AF_INET;
-        serverAddress.sin_port = htons(serverPort);
-        if (inet_pton(AF_INET, serverAddr.c_str(), &(serverAddress.sin_addr.s_addr)) <= 0)
-            throw std::exception();
-    }
-    catch (std::exception& ex)
-    {
-        std::cout << "Server address error: " << ex.what() << std::endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        socketStatus = false;
-    }
+    /*
+    struct sockaddr_in servAddrTemp;
+    servAddrTemp.sin_family = AF_INET;
+    servAddrTemp.sin_port = htons(serverPort); 
+    auto servAddrLitTemp = serverAddressLiteral.c_str();
+    servAddrTemp.sin_addr.s_addr = inet_pton(AF_INET, servAddrLitTemp, &servAddrLitTemp);
+    serverAddressStruct = servAddrTemp;
+    */
+    ZeroMemory(&serverAddressStruct, sizeof(serverAddressStruct));
+    serverAddressStruct.sin_family = AF_INET;
+    //serverAddressStruct.sin_port = htons(serverPort);
+    auto servAddrLiteralTemp = serverAddressLiteral.c_str();
+    serverAddressStruct.sin_addr.s_addr = inet_addr(servAddrLiteralTemp);
+    //serverAddressStruct.sin_addr.s_addr = inet_pton(AF_INET, servAddrLiteralTemp, &servAddrLiteralTemp);
+    serverAddressStruct.sin_port = htons(serverPort);
 
     buffer = nullptr;
     bufSize = 0;
 
     socketStatus = true;
+}
+
+Socket::Socket()
+{
+    this->serverAddressLiteral = "127.0.0.1"; //standard server parameters
+    this->serverPort = 8080;
+
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        socketStatus = false;
+        throw ClientException(WSAGetLastError(), "Winsock initialization error");
+    }
+
+    if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
+    {
+        socketStatus = false;
+        throw ClientException(WSAGetLastError(), "Invalid Winsock version");
+    }
+
+    clientSocket = NULL;
+
+    ZeroMemory(&serverAddressStruct, sizeof(serverAddressStruct));
+
+    //struct sockaddr_in servAddrTemp{};
+    //serverAddressStruct = servAddrTemp;
+
+    buffer = nullptr;
+    bufSize = 0;
+
+    socketStatus = false;
 }
 
 Socket::~Socket()
@@ -69,52 +100,31 @@ bool Socket::GetSocketStatus()
 
 bool Socket::ConnectToServer()
 {
-    try
+    if (connect(clientSocket, (sockaddr*)&serverAddressStruct, sizeof(serverAddressStruct)) < 0)
     {
-        if (connect(clientSocket, reinterpret_cast<const sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR)
-            throw std::exception();
-    }
-    catch (std::exception& ex)
-    {
-        std::cout << "Connection to the Server error: " << ex.what() << std::endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return false;
+        socketStatus = false;
+        throw ClientException(WSAGetLastError(), "Connection to the Server error");
     }
 
     return true;
 }
 
-int Socket::SendRequest(std::string request)
+int Socket::SendRequestAndReceiveResponse(std::string request)
 {
     int bytesRead;
 
-    try
+    int sendStatus = send(clientSocket, request.c_str(), request.length(), 0);
+    if (sendStatus == SOCKET_ERROR)
     {
-        int sendStatus = send(clientSocket, request.c_str(), request.length(), 0);
-        if (sendStatus == SOCKET_ERROR)
-            throw std::exception();
-    }
-    catch (std::exception& ex)
-    {
-        std::cout << "Request sending error: " << ex.what() << std::endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return false;
+        socketStatus = false;
+        throw ClientException(WSAGetLastError(), "Request sending error");
     }
 
-    try
+    bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
+    if (bytesRead == SOCKET_ERROR)
     {
-        bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
-        if (bytesRead == SOCKET_ERROR)
-            throw std::exception();
-    }
-    catch (std::exception& ex)
-    {
-        std::cout << "Response receiving error: " << ex.what() << std::endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return false;
+        socketStatus = false;
+        throw ClientException(WSAGetLastError(), "Response receiving error");
     }
 
     return bytesRead;
@@ -122,12 +132,10 @@ int Socket::SendRequest(std::string request)
 
 bool Socket::InitBuffer(const int bufferSize)
 {
-    buffer = new char(bufferSize);
+    buffer = new char(bufferSize); //now we have 4096 butes in memory, all are 0
 
     if (buffer == NULL)
         return false;
-
-    buffer = new char(bufferSize); //now we have 4096 butes in memory, all are 0
 
     return true;
 }

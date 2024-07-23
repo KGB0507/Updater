@@ -1,16 +1,23 @@
 #pragma once
+
+#define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
+#include <Winsock2.h>
+#include <Windows.h>
 #include <iostream>
 #include <string>
-#include <winsock2.h>
-#include <ws2tcpip.h>
+#include "ClientException.h"
 
 class Socket
 {
 private:
     SOCKET clientSocket;
     WSADATA wsaData;
+    sockaddr_in serverAddressStruct;
+    int socketId;
 
-    std::string serverAddr;
+    std::string serverAddressLiteral;
     int serverPort;
 
     int bufSize;
@@ -19,7 +26,9 @@ private:
     bool socketStatus;
 
 public:
-    Socket(const std::string servAddress, const int servPort);
+    Socket(const std::string serverAddress, const int serverPort);
+
+    Socket();
 
     ~Socket();
 
@@ -31,7 +40,7 @@ public:
 
     bool ConnectToServer();
 
-    int SendRequest(std::string request);
+    int SendRequestAndReceiveResponse(std::string request);
 
     bool InitBuffer(const int bufferSize);
 

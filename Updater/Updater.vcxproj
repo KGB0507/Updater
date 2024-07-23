@@ -42,7 +42,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -139,11 +139,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ClientException.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="Settings.cpp" />
     <ClCompile Include="SocketWrapper.cpp" />
     <ClCompile Include="UpdateManager.cpp" />
-    <ClCompile Include="Updater.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ClientException.h" />
+    <ClInclude Include="Settings.h" />
     <ClInclude Include="SocketWrapper.h" />
     <ClInclude Include="UpdateManager.h" />
   </ItemGroup>

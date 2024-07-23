@@ -28,7 +28,7 @@ void DownloadSpecificationHandler(const std::string pathToSpecification, Socket 
         if (!specif)
             throw std::exception("Specification file was not opened");
 
-        clientSocket.SendRequest("Download\tapp.spec");
+        clientSocket.SendRequestAndReceiveResponse("Download\tapp.spec");
 
         std::string line;
         int bytesSum = 0;
@@ -51,7 +51,7 @@ void DownloadSpecificationHandler(const std::string pathToSpecification, Socket 
 
             std::string request = "Download\t" + line;
 
-            int bytesRead = clientSocket.SendRequest(request);
+            int bytesRead = clientSocket.SendRequestAndReceiveResponse(request);
             //int bytesRead;
             //bytesRead = recv(clientSocket.GetClientSocket(), clientSocket.GetBuffer(), sizeof(clientSocket.GetBuffer()), 0);
             file.write(clientSocket.GetBuffer(), bytesRead);
